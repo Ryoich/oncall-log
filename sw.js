@@ -1,6 +1,6 @@
 // アプリを更新したら VERSION を上げる
-const VERSION = 'v1';
-const ASSETS = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
+const VERSION = 'v2';
+const ASSETS = ['./', 'index.html', 'form.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(VERSION).then((c) => c.addAll(ASSETS)));

@@ -44,6 +44,9 @@
     border: 1px solid var(--line); background: var(--card); }
   .end-btn { width: 100%; height: 72px; font-size: 22px; font-weight: 700; color: #fff; background: var(--danger); }
   .link-btn { background: none; color: var(--sub); font-size: 13px; padding: 8px 0 0; text-decoration: underline; }
+  .seg { display: flex; gap: 6px; margin-bottom: 10px; }
+  .seg button { flex: 1; height: 44px; background: var(--card); color: var(--text); border: 1px solid var(--line); font-size: 16px; }
+  .seg button.on { background: var(--primary); color: #fff; border-color: var(--primary); font-weight: 700; }
 
   .list { background: var(--card); border-radius: 14px; border: 1px solid var(--line); overflow: hidden; }
   .item { display: grid; grid-template-columns: 3.6em 1fr auto; gap: 8px; align-items: center;
@@ -52,6 +55,14 @@
   .item .d { color: var(--sub); font-size: 14px; }
   .item .p { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .item .p.none { color: var(--danger); font-weight: 400; }
+  .item .p small { font-weight: 400; color: var(--sub); font-size: 12px; border: 1px solid var(--line); border-radius: 6px; padding: 1px 5px; margin-right: 6px; }
+  .day-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 14px; background: var(--bg); border-top: 1px solid var(--line); }
+  .day-head:first-child { border-top: 0; }
+  .chips { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+  .chips button { padding: 5px 7px; font-size: 13px; border-radius: 8px; background: var(--card); color: var(--sub); border: 1px solid var(--line); }
+  .chips button.on { background: var(--primary); color: #fff; border-color: var(--primary); }
+  .settings input { width: 100%; padding: 10px 12px; font-size: 16px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); margin-bottom: 8px; }
+  .actions .main { background: var(--primary); color: #fff; border-color: var(--primary); }
   .item .t { font-variant-numeric: tabular-nums; text-align: right; font-size: 15px; }
   .item .t small { display: block; color: var(--sub); }
   .empty { color: var(--sub); text-align: center; padding: 24px; }
@@ -76,7 +87,7 @@
   dialog { border: 0; border-radius: 16px; padding: 20px; width: min(92vw, 420px); background: var(--card); color: var(--text); }
   dialog::backdrop { background: rgba(0,0,0,.4); }
   dialog label { display: block; font-size: 13px; color: var(--sub); margin: 12px 0 4px; }
-  dialog input { width: 100%; padding: 10px; font-size: 17px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); }
+  dialog input, dialog select { width: 100%; padding: 10px; font-size: 17px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); }
   dialog .btns { display: flex; gap: 10px; margin-top: 20px; }
   dialog .btns button { flex: 1; height: 46px; font-weight: 600; }
   .primary { background: var(--primary); color: #fff; }
@@ -110,11 +121,26 @@
       <div><b id="sum-time">0:00</b><span>合計時間</span></div>
     </div>
     <div id="month-list" class="list"></div>
+    <p class="note">日付ごとのボタンで区分（日直・宿直・怪我災害・小児二次）を選びます。9時前に開始した対応は前日の当直として扱います。</p>
     <div class="actions">
+      <button id="pdf" class="main wide">申請書（PDF）を作成</button>
       <button id="csv">CSV出力</button>
       <button id="copy">テキストをコピー</button>
       <button id="add" class="wide">＋ 手動で追加</button>
     </div>
+
+    <h2>申請書の記入者</h2>
+    <div class="settings">
+      <input id="s-name" placeholder="氏名" autocomplete="name">
+      <input id="s-dept" placeholder="所属">
+    </div>
+
+    <h2>申請書の様式</h2>
+    <p class="note" id="def-status"></p>
+    <div class="actions">
+      <button id="def-load" class="wide">様式ファイルを読み込む</button>
+    </div>
+    <input id="def-file" type="file" accept="application/json,.json" hidden>
 
     <h2>バックアップ</h2>
     <div class="actions">
@@ -134,12 +160,17 @@
 <dialog id="edit">
   <form method="dialog" id="edit-form">
     <strong id="edit-title">記録の編集</strong>
-    <label>患者ID</label>
+    <label>患者ID（診察以外は内容）</label>
     <input id="f-pid" autocomplete="off">
+    <label>場所</label>
+    <select id="f-place"><option value="1">1 外来</option><option value="2">2 病棟</option><option value="3">3 他</option></select>
     <label>開始</label>
     <input id="f-start" type="datetime-local" required>
     <label>終了</label>
     <input id="f-end" type="datetime-local">
+    <label>当直日</label>
+    <input id="f-duty" type="date" required>
+    <p class="note" style="margin:6px 0 0">通常は開始時刻から自動で決まります（9時前の開始は前日）。朝9時以降に始めた当直の続きの対応などは、ここで当直日を変更してください。</p>
     <div class="btns">
       <button type="button" class="ghost" id="f-cancel">キャンセル</button>
       <button type="submit" class="primary">保存</button>
@@ -150,20 +181,37 @@
 
 <div class="toast" id="toast"></div>
 
+<script src="form.js"></script>
 <script>
 'use strict';
 const KEY = 'oncall.records.v1';
 const $ = (s) => document.querySelector(s);
 
+const DUTY_KEY = 'oncall.duties.v1';
+const SETTINGS_KEY = 'oncall.settings.v1';
+const FORMDEF_KEY = 'oncall.formdef.v1';
+const PLACES = { 1: '外来', 2: '病棟', 3: '他' };
+// 区分の画面表示名（保存データと申請書の記載は 日直/宿直/救急/二次救 のまま）
+const KIND_LABELS = { 日直: '日直', 宿直: '宿直', 救急: '怪我災害', 二次救: '小児二次' };
+
 // ---- データ ----
-// record: { id, pid, start(ms), end(ms|null) }
+// record: { id, pid, start(ms), end(ms|null), place('1'|'2'|'3'), duty?('YYYY-MM-DD' 当直日を手動で指定した場合のみ) }
+// duties: { 'YYYY-MM-DD': ['宿直', ...] }  区分を手動で選んだ日のみ
+// settings: { name, dept, place(前回の場所) }
+// formDef: 申請書の文言（様式ファイル）。公開リポジトリには含めず、利用者が端末に読み込む
 let records = load();
-function load() {
-  try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch { return []; }
+let duties = loadJson(DUTY_KEY, {});
+let settings = loadJson(SETTINGS_KEY, {});
+let formDef = loadJson(FORMDEF_KEY, null);
+function loadJson(key, fallback) {
+  try { return JSON.parse(localStorage.getItem(key)) || fallback; } catch { return fallback; }
 }
+function load() { return loadJson(KEY, []); }
 function save() {
   localStorage.setItem(KEY, JSON.stringify(records));
 }
+const saveDuties = () => localStorage.setItem(DUTY_KEY, JSON.stringify(duties));
+const saveSettings = () => localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
 // ---- 時刻ユーティリティ ----
@@ -176,6 +224,28 @@ const durMin = (r) => Math.round((floorMin(r.end) - floorMin(r.start)) / 60000);
 const fmtDur = (min) => `${Math.floor(min / 60)}:${pad(min % 60)}`;
 const toLocalInput = (ms) => { const d = new Date(ms); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${hm(ms)}`; };
 const fromLocalInput = (v) => v ? new Date(v).getTime() : null;
+const minOfDay = (ms) => { const d = new Date(ms); return d.getHours() * 60 + d.getMinutes(); };
+// 当直日の自動判定: 9時前に開始した対応は前日の当直に含める
+function dutyDate(ms) {
+  const d = new Date(ms);
+  if (d.getHours() < 9) d.setDate(d.getDate() - 1);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+const dateKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const parseDateKey = (k) => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d); };
+// 記録の当直日（手動指定があればそれを優先）
+const dutyOf = (r) => (r.duty ? parseDateKey(r.duty) : dutyDate(r.start));
+const WEEK = '日月火水木金土';
+// 区分の初期値: 平日は宿直、土日は対応時刻から日直/宿直を推定（祝日は手動で選択）
+function guessKinds(date, list) {
+  const wd = date.getDay();
+  if (wd !== 0 && wd !== 6) return ['宿直'];
+  const kinds = [];
+  if (list.some((r) => r.start - date.getTime() < 17 * 3600e3)) kinds.push('日直');
+  if (list.some((r) => r.start - date.getTime() >= 17 * 3600e3)) kinds.push('宿直');
+  return kinds;
+}
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 function toast(msg) {
@@ -186,7 +256,7 @@ const buzz = () => navigator.vibrate && navigator.vibrate(30);
 
 // ---- 記録タブ ----
 $('#start').onclick = () => {
-  const r = { id: uid(), pid: '', start: Date.now(), end: null };
+  const r = { id: uid(), pid: '', start: Date.now(), end: null, place: settings.place || '1' };
   records.push(r); save(); buzz(); render();
   // 開始直後にID入力欄へフォーカス（後から入力してもOK）
   const input = document.querySelector(`[data-pid="${r.id}"]`);
@@ -199,6 +269,8 @@ function renderActive() {
     <div class="card active" style="margin-top:12px">
       <div class="row"><span class="elapsed" data-elapsed="${r.start}"></span><span class="since">${hm(r.start)} 開始</span></div>
       <input class="pid" data-pid="${r.id}" placeholder="患者IDを入力" value="${esc(r.pid)}" autocomplete="off" enterkeyhint="done">
+      <div class="seg">${Object.entries(PLACES).map(([v, label]) =>
+        `<button data-place="${v}" data-rid="${r.id}" class="${r.place === v ? 'on' : ''}">${label}</button>`).join('')}</div>
       <button class="end-btn" data-end="${r.id}">対応終了</button>
       <button class="link-btn" data-cancel="${r.id}">誤って開始した場合は取り消し</button>
     </div>`).join('');
@@ -220,7 +292,12 @@ $('#active-wrap').addEventListener('input', (e) => {
 $('#active-wrap').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.dataset.pid) e.target.blur(); });
 $('#active-wrap').addEventListener('click', (e) => {
   const endId = e.target.dataset.end, cancelId = e.target.dataset.cancel;
-  if (endId) {
+  if (e.target.dataset.place) {
+    const r = records.find((x) => x.id === e.target.dataset.rid);
+    r.place = settings.place = e.target.dataset.place;
+    save(); saveSettings();
+    e.target.parentNode.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === e.target));
+  } else if (endId) {
     const r = records.find((x) => x.id === endId);
     r.end = Date.now(); save(); buzz(); render();
     toast(r.pid ? `終了しました（${fmtDur(durMin(r))}）` : '終了しました。患者IDは一覧から入力できます');
@@ -232,7 +309,7 @@ $('#active-wrap').addEventListener('click', (e) => {
 function itemHtml(r) {
   return `<div class="item" data-edit="${r.id}">
     <span class="d">${md(r.start)}</span>
-    <span class="p ${r.pid ? '' : 'none'}">${r.pid ? esc(r.pid) : 'ID未入力'}</span>
+    <span class="p ${r.pid ? '' : 'none'}">${r.place ? `<small>${PLACES[r.place]}</small>` : ''}${r.pid ? esc(r.pid) : 'ID未入力'}</span>
     <span class="t">${hm(r.start)}–${hm(r.end)}<small>${fmtDur(durMin(r))}</small></span>
   </div>`;
 }
@@ -248,9 +325,23 @@ function renderToday() {
 // ---- 一覧タブ ----
 let cur = new Date(); cur = { y: cur.getFullYear(), m: cur.getMonth() };
 
+// 当直日がその月に含まれる記録（月末の宿直で翌月1日未明の対応は前月分）
 function monthRecords() {
-  const from = new Date(cur.y, cur.m, 1).getTime(), to = new Date(cur.y, cur.m + 1, 1).getTime();
-  return records.filter((r) => r.end && r.start >= from && r.start < to).sort((a, b) => a.start - b.start);
+  return records.filter((r) => {
+    const d = dutyOf(r);
+    return r.end && d.getFullYear() === cur.y && d.getMonth() === cur.m;
+  }).sort((a, b) => a.start - b.start);
+}
+
+// 当直日ごとにまとめる: [{ date, key, kinds, list }]
+function monthDays() {
+  const map = new Map();
+  monthRecords().forEach((r) => {
+    const date = dutyOf(r), key = dateKey(date);
+    if (!map.has(key)) map.set(key, { date, key, list: [] });
+    map.get(key).list.push(r);
+  });
+  return [...map.values()].map((d) => ({ ...d, kinds: duties[d.key] || guessKinds(d.date, d.list) }));
 }
 
 function renderMonth() {
@@ -258,13 +349,24 @@ function renderMonth() {
   const list = monthRecords();
   $('#sum-count').textContent = list.length;
   $('#sum-time').textContent = fmtDur(list.reduce((s, r) => s + durMin(r), 0));
-  $('#month-list').innerHTML = list.length ? list.map(itemHtml).join('') : '<div class="empty">この月の記録はありません</div>';
+  $('#month-list').innerHTML = list.length ? monthDays().map((d) => `
+    <div class="day-head">
+      <b>${d.date.getMonth() + 1}/${d.date.getDate()}(${WEEK[d.date.getDay()]})</b>
+      <span class="chips">${OncallForm.KINDS.map((k) =>
+        `<button data-kind="${k}" data-day="${d.key}" class="${d.kinds.includes(k) ? 'on' : ''}">${KIND_LABELS[k]}</button>`).join('')}</span>
+    </div>${d.list.map(itemHtml).join('')}`).join('') : '<div class="empty">この月の記録はありません</div>';
 }
+$('#month-list').addEventListener('click', (e) => {
+  const { kind, day } = e.target.dataset; if (!kind) return;
+  const d = monthDays().find((x) => x.key === day);
+  duties[day] = d.kinds.includes(kind) ? d.kinds.filter((k) => k !== kind) : OncallForm.KINDS.filter((k) => k === kind || d.kinds.includes(k));
+  saveDuties(); renderMonth();
+});
 $('#prev').onclick = () => { cur.m--; if (cur.m < 0) { cur.m = 11; cur.y--; } renderMonth(); };
 $('#next').onclick = () => { cur.m++; if (cur.m > 11) { cur.m = 0; cur.y++; } renderMonth(); };
 
 function download(name, text, type) {
-  const blob = new Blob([text], { type });
+  const blob = text instanceof Blob ? text : new Blob([text], { type });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = name;
   document.body.appendChild(a); a.click(); a.remove();
@@ -281,6 +383,56 @@ $('#csv').onclick = () => {
   download(`当直記録_${cur.y}${pad(cur.m + 1)}.csv`, '﻿' + csv, 'text/csv');
 };
 
+$('#pdf').onclick = async () => {
+  const days = monthDays();
+  if (!days.length) return toast('この月の記録はありません');
+  if (!formDef) return toast('先に「様式ファイルを読み込む」を行ってください');
+  if (!settings.name) toast('氏名が未入力です（下の欄で設定できます）');
+  try {
+    const blob = await OncallForm.buildPdf({
+      year: cur.y, month: cur.m + 1, name: settings.name, dept: settings.dept,
+      days: days.map((d) => ({
+        month: d.date.getMonth() + 1, day: d.date.getDate(), weekday: d.date.getDay(), kinds: d.kinds,
+        // 日付をまたいだ時刻はそのまま（例 2:00）記入される
+        entries: d.list.map((r) => ({ start: minOfDay(r.start), end: minOfDay(r.end), place: r.place, pid: r.pid })),
+      })),
+    }, formDef);
+    const name = `当直実働申請書_${cur.y}${pad(cur.m + 1)}.pdf`;
+    const file = new File([blob], name, { type: blob.type });
+    // スマホでは共有シートからそのまま「プリント」や「ファイルに保存」ができる
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file] }); return; } catch (err) { if (err.name === 'AbortError') return; }
+    }
+    download(name, blob);
+  } catch (err) {
+    console.error(err); toast('申請書を作成できませんでした');
+  }
+};
+
+function renderDefStatus() {
+  $('#def-status').textContent = formDef
+    ? '様式ファイルは読み込み済みです。様式が変わったときだけ読み込み直してください。'
+    : '申請書を作成するには、最初に一度だけ様式ファイル（form-def.json）を読み込んでください。';
+}
+renderDefStatus();
+$('#def-load').onclick = () => $('#def-file').click();
+$('#def-file').onchange = async (e) => {
+  const file = e.target.files[0]; e.target.value = '';
+  if (!file) return;
+  try {
+    const def = JSON.parse(await file.text());
+    const err = OncallForm.validateDef(def);
+    if (err) return toast(err);
+    formDef = def; localStorage.setItem(FORMDEF_KEY, JSON.stringify(def));
+    renderDefStatus(); toast('様式ファイルを読み込みました');
+  } catch { toast('ファイルを読み込めませんでした'); }
+};
+
+$('#s-name').value = settings.name || '';
+$('#s-dept').value = settings.dept || '';
+$('#s-name').onchange = (e) => { settings.name = e.target.value.trim(); saveSettings(); };
+$('#s-dept').onchange = (e) => { settings.dept = e.target.value.trim(); saveSettings(); };
+
 $('#copy').onclick = async () => {
   const list = monthRecords();
   if (!list.length) return toast('この月の記録はありません');
@@ -290,15 +442,22 @@ $('#copy').onclick = async () => {
 };
 
 $('#backup').onclick = () => {
-  download(`当直記録_backup_${ymd(Date.now()).replace(/\//g, '')}.json`, JSON.stringify(records, null, 1), 'application/json');
+  download(`当直記録_backup_${ymd(Date.now()).replace(/\//g, '')}.json`, JSON.stringify({ records, duties, settings, formDef }, null, 1), 'application/json');
 };
 $('#restore').onclick = () => $('#restore-file').click();
 $('#restore-file').onchange = async (e) => {
   const file = e.target.files[0]; e.target.value = '';
   if (!file) return;
   try {
-    const data = JSON.parse(await file.text());
+    const json = JSON.parse(await file.text());
+    // 旧形式（記録の配列のみ）にも対応
+    const data = Array.isArray(json) ? json : json.records;
     if (!Array.isArray(data) || data.some((r) => !r.id || typeof r.start !== 'number')) throw 0;
+    if (json.duties) { Object.assign(duties, json.duties); saveDuties(); }
+    if (json.settings) { settings = { ...json.settings, ...settings }; saveSettings(); }
+    if (json.formDef && !OncallForm.validateDef(json.formDef)) {
+      formDef = json.formDef; localStorage.setItem(FORMDEF_KEY, JSON.stringify(formDef)); renderDefStatus();
+    }
     // 既存データと統合（同じIDはバックアップ側で上書き）
     const map = new Map(records.map((r) => [r.id, r]));
     data.forEach((r) => map.set(r.id, r));
@@ -315,14 +474,24 @@ function openEdit(id) {
   const now = floorMin(Date.now());
   $('#edit-title').textContent = r ? '記録の編集' : '記録の追加';
   $('#f-pid').value = r ? r.pid : '';
+  $('#f-place').value = (r && r.place) || settings.place || '1';
   $('#f-start').value = toLocalInput(r ? r.start : now);
   $('#f-end').value = r && r.end ? toLocalInput(r.end) : (r ? '' : toLocalInput(now));
+  $('#f-duty').value = dateKey(r ? dutyOf(r) : dutyDate(now));
+  dutyTouched = !!(r && r.duty);
   $('#f-delete').hidden = !r;
   $('#edit').showModal();
 }
 document.addEventListener('click', (e) => {
   const row = e.target.closest('[data-edit]'); if (row) openEdit(row.dataset.edit);
 });
+// 当直日を手で変えていなければ、開始時刻の変更に合わせて自動判定し直す
+let dutyTouched = false;
+$('#f-duty').oninput = () => { dutyTouched = true; };
+$('#f-start').oninput = () => {
+  const start = fromLocalInput($('#f-start').value);
+  if (!dutyTouched && start) $('#f-duty').value = dateKey(dutyDate(start));
+};
 $('#add').onclick = () => openEdit(null);
 $('#f-cancel').onclick = () => $('#edit').close();
 $('#f-delete').onclick = () => {
@@ -334,7 +503,10 @@ $('#edit-form').onsubmit = (e) => {
   if (end && end < start) { e.preventDefault(); return toast('終了は開始より後にしてください'); }
   let r = records.find((x) => x.id === editingId);
   if (!r) { r = { id: uid() }; records.push(r); }
-  Object.assign(r, { pid: $('#f-pid').value.trim(), start, end });
+  Object.assign(r, { pid: $('#f-pid').value.trim(), start, end, place: $('#f-place').value });
+  // 自動判定と同じ日なら手動指定は持たない（後で開始時刻を直しても自動で追従させる）
+  const duty = $('#f-duty').value;
+  if (duty && duty !== dateKey(dutyDate(start))) r.duty = duty; else delete r.duty;
   save(); render();
 };
 
