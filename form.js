@@ -133,7 +133,6 @@
       hline(r0 + 6, 'A', 'R');
       ['B', 'C', 'G', 'H', 'L', 'N', 'P'].forEach((c) => vline(c, r0, r0 + 6));
       vline('E', r0, r0 + 5); vline('J', r0, r0 + 6, MID);
-      ['K', 'M', 'O', 'Q'].forEach((c) => vline(c, r0 + 1, r0 + 4));
       box(`A${r0}:Q${r0 + 6}`, THICK);
       text(`H${r0 + 6}:I${r0 + 6}`, def.subtotal, { size: 9 });
       KINDS.forEach((k) => {
