@@ -129,8 +129,9 @@
     // 1日分の枠
     page.blocks.forEach((r0, i) => {
       const b = blocks[i];
-      for (let k = 1; k < ROWS_PER_DAY; k++) { hline(r0 + k, 'A', 'C'); hline(r0 + k, 'C', 'R', 0.5, true); }
-      hline(r0 + 6, 'A', 'R');
+      // 月日・区分の列は1日分を1つの欄として横線を引かない
+      for (let k = 1; k < ROWS_PER_DAY; k++) hline(r0 + k, 'C', 'R', 0.5, true);
+      hline(r0 + 6, 'C', 'R');
       ['B', 'C', 'G', 'H', 'L', 'N', 'P'].forEach((c) => vline(c, r0, r0 + 6));
       vline('E', r0, r0 + 5); vline('J', r0, r0 + 6, MID);
       box(`A${r0}:Q${r0 + 6}`, THICK);

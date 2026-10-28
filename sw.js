@@ -1,5 +1,5 @@
 // アプリを更新したら VERSION を上げる
-const VERSION = 'v3';
+const VERSION = 'v4';
 const ASSETS = ['./', 'index.html', 'form.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', (e) => {
